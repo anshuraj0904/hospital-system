@@ -15,9 +15,10 @@ const appointementSchema = new mongoose.Schema({
    },
    issue:{type: String, required:true},
    isAssigned: { type: Boolean, default: false },
+   specialization: {type: String,required: true},
    status:{
     type: String,
-    enum : ["open","in-progress","closed"],
+    enum : ["open","in-progress","closed", "cancelled"],
     default:"open"
    }
 
