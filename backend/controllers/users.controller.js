@@ -55,7 +55,7 @@ export const patientsignUp = async (req, res) => {
     console.error("Error creating the user!", e);
     return res.status(500).json({
       message: "Signup Failed!",
-      details: e.message,
+      error: e.message,
     });
   }
 };
@@ -110,7 +110,7 @@ export const userLogin = async (req, res) => {
     console.error("Error during login:", e);
     return res.status(500).json({
       message: "Login failed due to server error",
-      details: e.message
+      error: e.message
     });
   }
 };

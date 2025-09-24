@@ -4,7 +4,7 @@ import mongoose from "mongoose";
 const treatmentSchema = new mongoose.Schema({
     appointmentId :{
         type: mongoose.Schema.Types.ObjectId,
-        ref:"appointment"
+        ref:"Appointment"
     },
 
     statement : {type:String},

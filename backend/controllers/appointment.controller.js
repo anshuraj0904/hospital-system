@@ -25,7 +25,7 @@ export const raiseIssue = async(req, res)=>{
         console.error("Error raising the issue ", e);
         return res.status(500).json({
             message:"Error raising this new issue",
-            data:e.message
+            error:e.message
         })
     }
 }
@@ -37,7 +37,7 @@ export const assignSpecialization = async(req,res)=>{
     if(!specialization)
     {
          return res.status(400).json({
-            message:"Please give the specialization!"
+            message:"Please pass the specialization required!"
         })
     }
 
@@ -56,7 +56,7 @@ export const assignSpecialization = async(req,res)=>{
         console.error("Error assigning the specialization", e)
         return res.status(500).json({
             message:"Error assiging the specialization",
-            data:e.message
+            error:e.message
         })
     }
 }
@@ -81,7 +81,7 @@ export const appointIssue = async(req,res)=>{
 
     } catch (e) {
         console.error("Error assigning doctor:", e);
-        return res.status(500).json({ message: "Failed to assign doctor", details: e.message });
+        return res.status(500).json({ message: "Failed to assign doctor", error: e.message });
     }
 }
 
@@ -95,8 +95,23 @@ export const fetchOpenIssues = async(req,res)=>{
             })
     } catch (e) {
         console.error("Error fetching appointments", e)
-        return res.status(500).json({ message: "Failed to get all open appointments", details: e.message });
+        return res.status(500).json({ message: "Failed to get all open appointments", error: e.message });
 
+    }
+}
+
+export const fetchCancelledIssues = async(req,res)=>{
+    try {
+        const cancelledAppointments = await Appointment.find({status:"cancelled"})
+        return res.status(200).json({
+            message:"Fetched cancelled appointments!",
+            data: cancelledAppointments.length >0 ? cancelledAppointments : []
+        })
+
+
+    } catch (e) {
+        console.error("Error fetching the cancelled appointments", e)
+        return res.status(500).json({message:"Failed to fetch cancelled appointments!", error:e.message})
     }
 }
 
@@ -111,6 +126,36 @@ export const getMyAppointements = async(req, res)=>{
         })
     } catch (e) {
         console.error("Error fetching the open your appointments", e)
-        return res.status(500).json({message:"Failed to fetch open appointments for you", data:e.message})
+        return res.status(500).json({message:"Failed to fetch open appointments for you", error:e.message})
     }
-} 
+}
+
+export const cancelAppointment = async(req,res)=>{
+    const {appointmentId} = req.params
+
+    try {
+        const appointment = await Appointment.findById(appointmentId)
+        if(!appointment)
+        {
+            return res.status(404).json({message:"Appointment not found!"})
+        }
+
+        appointment.status = "cancelled"
+        appointment.doctorId = null
+        await appointment.save()
+
+        
+        return res.status(200).json({
+            message: "Appointment cancelled successfully",
+            data: appointment
+        });
+    } catch (e) {
+        console.error("Something went wrong while cancelling this appointment!", e)
+        return res.status(500).json({message:"Something went wrong while cancelling this appointment!", error:e.message})
+    }  
+}
+
+
+export const deleteAppointment = async(req,res)=>{
+    
+}

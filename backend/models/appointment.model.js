@@ -4,18 +4,18 @@ import mongoose from "mongoose";
 const appointementSchema = new mongoose.Schema({
    doctorId :{
     type: mongoose.Schema.Types.ObjectId,
-    ref:"user",
+    ref:"User",
     default:null,
     required:true
    } ,
    patientId :{
     type: mongoose.Schema.Types.ObjectId,
-    ref:"user",
+    ref:"User",
     required:true
    },
    issue:{type: String, required:true},
    isAssigned: { type: Boolean, default: false },
-   specialization: {type: String,required: true},
+   specialization: {type: String, default:null},
    status:{
     type: String,
     enum : ["open","in-progress","closed", "cancelled"],
@@ -25,4 +25,4 @@ const appointementSchema = new mongoose.Schema({
 },{timestamps:true})
 
 
-export default mongoose.model({"Appointment": appointementSchema})
+export default mongoose.model("Appointment", appointementSchema)
