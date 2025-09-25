@@ -12,6 +12,13 @@ export const raiseIssue = async(req, res)=>{
     }
 
     try {
+
+        if(req.user.role !== "patient")
+        {
+            return res.status(403).json({
+                message:"Only a patient can raise an issue!"
+            })
+        }
         const newIssue = await Appointment.create({
             patientId: req.user.id,
             issue    
