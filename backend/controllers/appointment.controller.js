@@ -37,7 +37,7 @@ export const raiseIssue = async(req, res)=>{
     }
 }
 
-export const assignSpecialization = async(req,res)=>{
+export const assignSpecialist = async(req,res)=>{
     const {appointmentId} = req.params
     const {specialization} = req.body
 
@@ -94,7 +94,7 @@ export const appointIssue = async(req,res)=>{
 
 export const fetchOpenIssues = async(req,res)=>{
     try {
-        const openAppointments = await Appointment.find({status:"open"})
+        const openAppointments = await Appointment.find({status:"open"}).sort({createdAt:-1, updatedAt:-1})
     
         return res.status(200).json({
                 message:"Fetched all open appointments here!",
@@ -228,9 +228,6 @@ export const deleteAppointment = async(req,res)=>{
 
             }
         }
-        
-        
-
     } catch (error) {
         console.error("Error deleting appointment:", error);
     return res.status(500).json({

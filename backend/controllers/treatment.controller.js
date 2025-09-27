@@ -118,11 +118,9 @@ export const getOneTreatment = async (req, res) => {
             .json({ message: "You can only see your own prescription!" });
         } else {
           if (treatment.paymentStatus === "yet to pay") {
-            return res
-              .status(403)
-              .json({
-                message: "You can only see the prescription after the payment!",
-              });
+            return res.status(403).json({
+              message: "You can only see the prescription after the payment!",
+            });
           } else {
             // Isko we'll see ki kaise change karna hai.
             const prescriptionForPatient = await treatment
@@ -162,6 +160,119 @@ export const getOneTreatment = async (req, res) => {
     );
     return res.status(500).json({
       message: "Some error in getting the treatment prescription!",
+      error: e.message,
+    });
+  }
+};
+
+export const updatePrescription = async (req, res) => {
+  const { type, prescr } = req.body;
+  const { treatmentId } = req.params;
+  const userId = req.user.id;
+
+  if (!type || !prescr) {
+    return res.status(401).json({ message: "Please pass all the details" });
+  }
+
+  if (!Array.isArray(prescr) || prescr.length === 0) {
+    return res.status(401).json({
+      message: "Please pass the prescription in the form of an array!",
+    });
+  }
+
+  if (req.user.role !== "doctor") {
+    return res
+      .status(403)
+      .json({ message: "You are not authorised to do this!" });
+  }
+
+  try {
+    const treatmentToEdit = await Treatment.findById(treatmentId);
+    if (!treatmentToEdit) {
+      return res.status(404).json({
+        message: "There's no such treatment!",
+      });
+    }
+
+    if (treatmentToEdit.createdBy !== userId.toString()) {
+      return res
+        .status(403)
+        .json({ message: "You are not authorised to edit this treatment!" });
+    }
+
+    if (treatmentToEdit.paymentStatus !== "yet to pay") {
+      return res.status(403).json({
+        message: "Prescription cannot be edited after payment is done!",
+      });
+    }
+
+    if (type === "change") {
+      treatmentToEdit.prescription = prescr;
+      await treatmentToEdit.save();
+
+      return res
+        .status(200)
+        .json({ message: "Prescription changed successfully!" });
+    }
+
+    treatmentToEdit.prescription.push(...prescr);
+    await treatmentToEdit.save();
+    return res
+      .status(200)
+      .json({ message: "Presccription updated successfully!" });
+  } catch (e) {}
+};
+
+export const getAllTreatments = async (req, res) => {
+  const userRole = req.user.role;
+  const userId = req.user.id;
+  try {
+    if (userRole === "doctor") {
+      const prescriptionList = await Treatment.find({
+        createdBy: userId,
+      }).select("-createdBy");
+      return res.status(200).json({
+        message: "Fetched the prescriptions created by you!",
+        data: prescriptionList.length > 0 ? prescriptionList : [],
+      });
+    } else if (userRole === "admin") {
+      const listOfPrescription = await Treatment.find().sort({
+        createdAt: -1,
+        updatedAt: -1,
+      });
+      // For getting the list in descending order i.e, the newest first.
+      return res.status(200).json({
+        message: "Fetched all Prescriptions!",
+        data: listOfPrescription,
+      });
+    } else {
+      const closedAppontments = await Appointment.find({
+        patientId: req.user.id,
+        status: "closed",
+      }).select("_id");
+
+      if (!closedAppontments || closedAppontments.length == 0) {
+        return res.status(200).json({
+          message: "No prescriptions available for you at the moment",
+          data: [],
+        });
+      }
+
+      const appointmentIds = closedAppontments.map((app) => app._id);
+      const listOfPrescription = await Treatment.find({
+        appointmentId: { $in: appointmentIds },
+      })
+        .sort({ createdAt: -1, updatedAt: -1 })
+        .select("-paymentStatus");
+      return res.status(200).json({
+        message: "Fetched list of Prescritpions made for you!",
+        data: listOfPrescription,
+      });
+    }
+  } catch (e) {
+    console.error("Error getting the list of prescriptions!", e.message);
+    return res.status(500).json({
+      message: "Error getting the list of prescriptions!",
       error: e.message,
     });
   }
