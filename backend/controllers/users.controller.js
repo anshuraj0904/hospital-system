@@ -2,8 +2,54 @@ import bcrypt from "bcrypt";
 import validator from "validator";
 import User from "../models/users.model.js";
 import jwt from "jsonwebtoken";
+import Specialization from "../models/specialization.model.js";
 
-export const patientsignUp = async (req, res) => {
+const addDoctorSpecializations = async (doctor_id, specializations) => {
+  try {
+    // Normalize input (lowercase + trim)
+    const normalizedSpecs = specializations.map((spl) =>
+      spl.toLowerCase().trim()
+    );
+
+    // Find existing specs (case-insensitive)
+    const existingSpecs = await Specialization.find({
+      specialization: { $in: normalizedSpecs },
+    });
+
+    const existingSpecNames = existingSpecs.map((s) => s.specialization);
+
+    // Create missing specializations
+    const newSpecs = normalizedSpecs
+      .filter((spl) => !existingSpecNames.includes(spl))
+      .map((spl) => ({
+        specialization: spl,
+        doctors: [doctor_id],
+      }));
+
+    if (newSpecs.length > 0) {
+      await Specialization.insertMany(newSpecs);
+    }
+
+    // Add doctor to existing specs
+    for (let spec of existingSpecs) {
+      if (!spec.doctors.includes(doctor_id)) {
+        spec.doctors.push(doctor_id);
+        await spec.save();
+      }
+    }
+
+    return "Specialization assignment/creation done successfully!";
+  } catch (e) {
+    console.error(
+      "Some error occurred while assigning/creating specializations!",
+      e.message
+    );
+    return "Some error occurred while assigning/creating specializations!";
+  }
+};
+
+
+export const userSignUp = async (req, res) => {
   const { email, name, password } = req.body;
   let { specialization } = req.body;
 
@@ -29,6 +75,10 @@ export const patientsignUp = async (req, res) => {
     role = "doctor";
     signupMessage =
       "Welcome onboard Doctor! Looking forward to seeing you make a difference.";
+  } else if (Array.isArray(specialization) && specialization.length === 0) {
+    return res
+      .status(401)
+      .json({ message: "Can not have a doctor without a specialization" });
   } else {
     role = "patient";
     signupMessage =
@@ -37,20 +87,31 @@ export const patientsignUp = async (req, res) => {
 
   try {
     const hashed_password = await bcrypt.hash(password, 10);
-    await User.create({
+    const newUser = await User.create({
       name: name,
       email: email,
       password: hashed_password,
       role: role,
-      specialization: role === "doctor" ? specialization:[],
-      status: role === "doctor" ? "available" : undefined
+      isAvailable: role === "doctor" ? "yes" : "not needed",
+      specialization: role === "doctor" ? specialization : [],
+      status: role === "doctor" ? "available" : undefined,
     });
 
-    return res
-      .status(201)
-      .json({
-        message: signupMessage,
-      });
+    if (role === "doctor") {
+      const specializationAssignment = await addDoctorSpecializations(
+        newUser._id,
+        specialization
+      );
+      signupMessage =
+        role === "doctor"
+          ? signupMessage + specializationAssignment
+          : signupMessage;
+    }
+
+    return res.status(201).json({
+      message: signupMessage,
+      data: newUser,
+    });
   } catch (e) {
     console.error("Error creating the user!", e);
     return res.status(500).json({
@@ -60,13 +121,12 @@ export const patientsignUp = async (req, res) => {
   }
 };
 
-
 export const userLogin = async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
     return res.status(400).json({
-      message: "Please enter your credentials!"
+      message: "Please enter your credentials!",
     });
   }
 
@@ -75,15 +135,15 @@ export const userLogin = async (req, res) => {
 
     if (!isUser) {
       return res.status(401).json({
-        message: "User does not exist!"
+        message: "User does not exist!",
       });
     }
 
-    const isPasswrdMatch = await bcrypt.compare(password, isUser.password);
+    const isPasswordMatch = await bcrypt.compare(password, isUser.password);
 
-    if (!isPasswrdMatch) {
+    if (!isPasswordMatch) {
       return res.status(401).json({
-        message: "Password doesn't match!"
+        message: "Password doesn't match!",
       });
     }
 
@@ -99,32 +159,105 @@ export const userLogin = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 1000 * 60 * 60 // 1 hour
+      maxAge: 1000 * 60 * 60, // 1 hour
     });
 
     return res.status(200).json({
       message: "Signed in successfully!",
-      data: userdets
+      data: userdets,
     });
   } catch (e) {
     console.error("Error during login:", e);
     return res.status(500).json({
       message: "Login failed due to server error",
-      error: e.message
+      error: e.message,
     });
   }
 };
 
+export const userLogout = async (_, res) => {
+  res.clearCookie("token", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+  });
 
+  return res.status(200).json({
+    message: "User logged out successfully!",
+  });
+};
 
-export const userLogout = async(_,res)=>{
-   res.clearCookie("token",{
-    httpOnly:true,
-    secure:process.env.NODE_ENV === "production",
-    sameSite:"strict"
-   })
+export const changePassword = async (req, res) => {
+  const { currentPassword, newPassword, confirmNewPassword } = req.body;
 
-   return res.status(200).json({
-    message:"User logged out successfully!"
-   })
-}
+  if (!currentPassword || !newPassword || !confirmNewPassword) {
+    return res.status(401).json({ message: "Please pass all the details" });
+  }
+
+  if (newPassword !== confirmNewPassword) {
+    return res.status(401).json({ message: "These two must be same!" });
+  }
+  try {
+    const userDets = await User.findById(req.user.id);
+
+    const isPassMatching = await bcrypt.compare(
+      currentPassword,
+      userDets.password
+    );
+
+    if (!isPassMatching) {
+      return res.status(401).json({
+        message: "Pass the correct current password for changing the password!",
+      });
+    }
+
+    const hashPassword = await bcrypt.hash(newPassword, 10);
+
+    userDets.password = hashPassword;
+    await userDets.save();
+    return res.status(200).json({ message: "Password updated successfully!" });
+  } catch (e) {
+    console.error("Error changing the password", e.message);
+    return res.status(500).json({
+      message: "Error changing the password!",
+      data: e.message,
+    });
+  }
+};
+
+export const changeAvailabilityStatus = async (req, res) => {
+  const userRole = req.user.role;
+  const userId = req.user.id;
+
+  if (userRole !== "doctor") {
+    return res.status(403).json({
+      message: "Not for you!",
+    });
+  }
+
+  try {
+    const userDets = await User.findById(userId);
+    if (userDets.isAvailable === "yes") {
+      userDets.isAvailable = "no";
+      await userDets.save();
+      return res.status(200).json({
+        message: "Have a nice vacay doctor! Would love to see you soon.",
+      });
+    } else {
+      userDets.isAvailable = "yes";
+      await userDets.save();
+      return res.status(200).json({
+        message: "Welcome back doctor! We were missing you.",
+      });
+    }
+  } catch (e) {
+    console.error(
+      "Some issue occured while changing the availability status!",
+      e.message
+    );
+    return res.status(500).json({
+      message: "Some issue occured while changing the availability status!",
+      error: e.message,
+    });
+  }
+};

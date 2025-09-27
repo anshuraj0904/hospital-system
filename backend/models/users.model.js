@@ -7,6 +7,7 @@ const userSchema =  new mongoose.Schema({
     name: String,
     role: {type: String, default:"user", enum:["patient", "doctor", "admin"]},
     specialization:[String],
+    isAvailable:{type:String, enum:["yes", "no", "not needed"]},
     status: { type: String, enum: ["available", "on-leave"], default: undefined },
     warnings: { type: Number, default: 0 },  
     isBlocked: { type: Boolean, default: false }
